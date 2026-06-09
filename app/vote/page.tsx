@@ -2,17 +2,20 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  CLUBS,
-  MEMBERS,
-  CLUB_STYLES,
-  RANK_MEDALS,
-  RANK_LABELS,
-  RANK_SCORES,
-  RANK_COLORS,
-  SESSION_KEY,
-} from "@/lib/data";
+import { CLUBS, MEMBERS, RANK_MEDALS, RANK_LABELS, RANK_SCORES, RANK_COLORS, SESSION_KEY } from "@/lib/data";
 import type { SessionData } from "@/lib/types";
+
+// 선택 상태별 클래스는 페이지 파일에 직접 정의 (Tailwind purge 방지)
+const CLUB_SELECTED: Record<string, string> = {
+  cert: "bg-blue-500 text-white border-blue-500",
+  move: "bg-emerald-500 text-white border-emerald-500",
+  stock: "bg-amber-500 text-white border-amber-500",
+  book: "bg-purple-500 text-white border-purple-500",
+  ai: "bg-rose-500 text-white border-rose-500",
+};
+
+const CLUB_DEFAULT =
+  "bg-white text-slate-700 border-slate-200 hover:border-slate-400";
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -36,11 +39,7 @@ function StepIndicator({ current }: { current: number }) {
 export default function VotePage() {
   const router = useRouter();
   const [session, setSession] = useState<SessionData | null>(null);
-  const [rankings, setRankings] = useState<(string | null)[]>([
-    null,
-    null,
-    null,
-  ]);
+  const [rankings, setRankings] = useState<(string | null)[]>([null, null, null]);
   const [selectedMVP, setSelectedMVP] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,10 +58,8 @@ export default function VotePage() {
 
   function handleClubClick(clubId: string) {
     if (rankings.includes(clubId)) {
-      // 이미 슬롯에 있으면 제거하고 나머지 앞으로 당기기
       const compact = rankings
-        .filter((r) => r !== null && r !== clubId)
-        .filter(Boolean) as string[];
+        .filter((r) => r !== null && r !== clubId) as string[];
       setRankings([...compact, ...Array(3 - compact.length).fill(null)]);
     } else {
       const firstEmpty = rankings.findIndex((r) => r === null);
@@ -80,7 +77,6 @@ export default function VotePage() {
   function handleNext() {
     if (!session) return;
     if (rankings.some((r) => r === null) || !selectedMVP) return;
-
     const updated: SessionData = {
       ...session,
       rankings: rankings as string[],
@@ -152,7 +148,7 @@ export default function VotePage() {
 
           {/* 안내 문구 */}
           <div className="flex items-center gap-2 bg-indigo-50 rounded-xl px-3 py-2 mb-4 mt-3">
-            <span className="text-sm">💡</span>
+            <span className="text-sm flex-shrink-0">💡</span>
             <p className="text-xs text-indigo-700 font-medium">
               1등 <strong>3점</strong> · 2등 <strong>2점</strong> · 3등{" "}
               <strong>1점</strong>으로 집계됩니다. 본인 소모임은 선택 불가합니다.
@@ -169,15 +165,15 @@ export default function VotePage() {
                   key={idx}
                   className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 transition-all ${
                     club
-                      ? RANK_COLORS[idx] + " border-current"
+                      ? RANK_COLORS[idx]
                       : "border-dashed border-slate-200 bg-slate-50"
                   }`}
                 >
-                  <span className="text-2xl leading-none w-8 text-center">
+                  <span className="text-2xl leading-none w-8 text-center flex-shrink-0">
                     {RANK_MEDALS[idx]}
                   </span>
                   <span
-                    className={`text-xs font-bold w-6 ${
+                    className={`text-xs font-bold w-6 flex-shrink-0 ${
                       club ? "text-slate-600" : "text-slate-300"
                     }`}
                   >
@@ -185,16 +181,16 @@ export default function VotePage() {
                   </span>
                   {club ? (
                     <>
-                      <span className="text-lg">{club.emoji}</span>
-                      <span className="flex-1 font-bold text-sm text-slate-800">
+                      <span className="text-lg flex-shrink-0">{club.emoji}</span>
+                      <span className="flex-1 font-bold text-sm text-slate-800 leading-snug">
                         {club.name}
                       </span>
-                      <span className="text-xs font-bold text-slate-400">
+                      <span className="text-xs font-bold text-slate-400 flex-shrink-0">
                         +{RANK_SCORES[idx]}점
                       </span>
                       <button
                         onClick={() => handleClubClick(clubId!)}
-                        className="w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-xs font-bold flex items-center justify-center hover:bg-rose-100 hover:text-rose-500 transition-colors"
+                        className="w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-xs font-bold flex items-center justify-center hover:bg-rose-100 hover:text-rose-500 transition-colors flex-shrink-0"
                       >
                         ×
                       </button>
@@ -214,7 +210,6 @@ export default function VotePage() {
             {votableClubs.map((club) => {
               const rankIdx = rankings.indexOf(club.id);
               const isPlaced = rankIdx !== -1;
-              const style = CLUB_STYLES[club.id];
               return (
                 <button
                   key={club.id}
@@ -222,16 +217,16 @@ export default function VotePage() {
                   disabled={allRanked && !isPlaced}
                   className={`relative flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 text-left font-semibold text-sm transition-all duration-150 active:scale-98 ${
                     isPlaced
-                      ? style.selected + " opacity-70"
+                      ? CLUB_SELECTED[club.id] + " opacity-80"
                       : allRanked
                       ? "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
-                      : style.card
+                      : CLUB_DEFAULT
                   }`}
                 >
-                  <span className="text-xl leading-none">{club.emoji}</span>
-                  <span className="flex-1">{club.name}</span>
+                  <span className="text-xl leading-none flex-shrink-0">{club.emoji}</span>
+                  <span className="flex-1 leading-snug">{club.name}</span>
                   {isPlaced && (
-                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-white/30 text-xs font-black">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-white/30 text-xs font-black flex-shrink-0">
                       {rankIdx + 1}
                     </span>
                   )}
@@ -251,7 +246,7 @@ export default function VotePage() {
           </div>
 
           <div className="flex items-center gap-2 bg-violet-50 rounded-xl px-3 py-2 mb-4 mt-3">
-            <span className="text-sm">⭐</span>
+            <span className="text-sm flex-shrink-0">⭐</span>
             <p className="text-xs text-violet-700 font-medium">
               <strong>{myClub?.name}</strong> 내에서 MVP를 1명 선택해주세요.
               본인은 선택할 수 없습니다.
@@ -267,13 +262,11 @@ export default function VotePage() {
                   onClick={() => setSelectedMVP(isSelected ? null : name)}
                   className={`py-4 px-3 rounded-xl border-2 font-bold text-sm transition-all duration-150 active:scale-95 ${
                     isSelected
-                      ? "bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-100 scale-105"
+                      ? "bg-violet-600 text-white border-violet-600 shadow-md scale-105"
                       : "bg-white text-slate-700 border-slate-200 hover:border-violet-300"
                   }`}
                 >
-                  {isSelected && (
-                    <span className="mr-1.5">⭐</span>
-                  )}
+                  {isSelected && <span className="mr-1.5">✓</span>}
                   {name}
                 </button>
               );
@@ -294,11 +287,7 @@ export default function VotePage() {
                 : "bg-slate-100 text-slate-300 cursor-not-allowed"
             }`}
           >
-            {!allRanked
-              ? `순위를 모두 선택해주세요 (${rankings.filter(Boolean).length}/3)`
-              : !selectedMVP
-              ? "MVP를 선택해주세요"
-              : "최종 확인하기 →"}
+            최종 확인
           </button>
         </div>
       </div>

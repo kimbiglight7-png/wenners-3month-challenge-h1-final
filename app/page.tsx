@@ -3,13 +3,19 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import {
-  CLUBS,
-  MEMBERS,
-  CLUB_STYLES,
-  SESSION_KEY,
-  SUBMITTED_KEY,
-} from "@/lib/data";
+import { CLUBS, MEMBERS, SESSION_KEY, SUBMITTED_KEY } from "@/lib/data";
+
+// 선택 상태별 클래스는 페이지 파일에 직접 정의 (Tailwind purge 방지)
+const CLUB_SELECTED: Record<string, string> = {
+  cert: "bg-blue-500 text-white border-blue-500 shadow-md",
+  move: "bg-emerald-500 text-white border-emerald-500 shadow-md",
+  stock: "bg-amber-500 text-white border-amber-500 shadow-md",
+  book: "bg-purple-500 text-white border-purple-500 shadow-md",
+  ai: "bg-rose-500 text-white border-rose-500 shadow-md",
+};
+
+const CLUB_DEFAULT =
+  "bg-white text-slate-700 border-slate-200 hover:border-slate-400";
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -50,7 +56,6 @@ export default function Step1Page() {
       const { data } = await supabase
         .from("votes")
         .select("voter_club, voter_name");
-
       if (data) {
         setVotedKeys(
           new Set(data.map((v) => `${v.voter_club}:${v.voter_name}`))
@@ -131,19 +136,20 @@ export default function Step1Page() {
           <div className="flex flex-col gap-3">
             {CLUBS.map((club) => {
               const isSelected = selectedClub === club.id;
-              const style = CLUB_STYLES[club.id];
               return (
                 <button
                   key={club.id}
                   onClick={() => handleClubSelect(club.id)}
                   className={`flex items-center gap-3 px-4 py-4 rounded-xl border-2 text-left font-semibold text-sm transition-all duration-150 active:scale-98 ${
-                    isSelected ? style.selected : style.card
+                    isSelected ? CLUB_SELECTED[club.id] : CLUB_DEFAULT
                   }`}
                 >
-                  <span className="text-2xl leading-none">{club.emoji}</span>
-                  <span className="flex-1">{club.name}</span>
+                  <span className="text-2xl leading-none flex-shrink-0">
+                    {club.emoji}
+                  </span>
+                  <span className="flex-1 leading-snug">{club.name}</span>
                   {isSelected && (
-                    <span className="text-base font-bold">✓</span>
+                    <span className="flex-shrink-0 text-base font-black">✓</span>
                   )}
                 </button>
               );
@@ -153,7 +159,7 @@ export default function Step1Page() {
 
         {/* 이름 선택 */}
         {selectedClub && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center gap-2 mb-4">
               <span className="w-6 h-6 rounded-full bg-violet-600 text-white text-xs font-bold flex items-center justify-center">
                 2
@@ -176,10 +182,11 @@ export default function Step1Page() {
                       isVoted
                         ? "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
                         : isSelected
-                        ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-100 scale-105"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-md scale-105"
                         : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 active:scale-95"
                     }`}
                   >
+                    {isSelected && <span className="mr-1">✓</span>}
                     {name}
                     {isVoted && (
                       <span className="absolute -top-1.5 -right-1.5 bg-slate-400 text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold">
@@ -193,7 +200,7 @@ export default function Step1Page() {
           </div>
         )}
 
-        {/* 다음 버튼 */}
+        {/* 하단 버튼 */}
         <button
           onClick={handleNext}
           disabled={!canProceed}
@@ -203,7 +210,7 @@ export default function Step1Page() {
               : "bg-slate-100 text-slate-300 cursor-not-allowed"
           }`}
         >
-          {canProceed ? "다음 단계로 →" : "소모임과 이름을 선택해주세요"}
+          다음
         </button>
       </div>
     </div>
