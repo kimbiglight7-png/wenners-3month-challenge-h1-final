@@ -13,7 +13,7 @@ import type { VoteRecord, ClubScore, MVPResult } from "@/lib/types";
 
 const ADMIN_PASSWORD = "0316";
 
-// ─── 점수 계산 헬퍼 ───────────────────────────────────────────
+// ─── 점수 계산 ───────────────────────────────────────────────
 function calcClubScores(votes: VoteRecord[]): ClubScore[] {
   const map: Record<
     string,
@@ -25,54 +25,177 @@ function calcClubScores(votes: VoteRecord[]): ClubScore[] {
   });
 
   votes.forEach((v) => {
-    if (map[v.rank1_club]) {
-      map[v.rank1_club].score += 3;
-      map[v.rank1_club].rank1 += 1;
-    }
-    if (map[v.rank2_club]) {
-      map[v.rank2_club].score += 2;
-      map[v.rank2_club].rank2 += 1;
-    }
-    if (map[v.rank3_club]) {
-      map[v.rank3_club].score += 1;
-      map[v.rank3_club].rank3 += 1;
-    }
+    if (map[v.rank1_club]) { map[v.rank1_club].score += 3; map[v.rank1_club].rank1 += 1; }
+    if (map[v.rank2_club]) { map[v.rank2_club].score += 2; map[v.rank2_club].rank2 += 1; }
+    if (map[v.rank3_club]) { map[v.rank3_club].score += 1; map[v.rank3_club].rank3 += 1; }
   });
 
   return CLUBS.map((c) => ({
-    clubId: c.id,
-    clubName: c.name,
-    emoji: c.emoji,
-    totalScore: map[c.id].score,
-    rank1Votes: map[c.id].rank1,
-    rank2Votes: map[c.id].rank2,
-    rank3Votes: map[c.id].rank3,
+    clubId: c.id, clubName: c.name, emoji: c.emoji,
+    totalScore: map[c.id].score, rank1Votes: map[c.id].rank1,
+    rank2Votes: map[c.id].rank2, rank3Votes: map[c.id].rank3,
   })).sort((a, b) => b.totalScore - a.totalScore);
 }
 
 function calcMVPs(votes: VoteRecord[]): MVPResult[] {
   const map: Record<string, Record<string, number>> = {};
-
   votes.forEach((v) => {
     if (!map[v.voter_club]) map[v.voter_club] = {};
-    map[v.voter_club][v.mvp_name] =
-      (map[v.voter_club][v.mvp_name] || 0) + 1;
+    map[v.voter_club][v.mvp_name] = (map[v.voter_club][v.mvp_name] || 0) + 1;
   });
-
   return CLUBS.map((c) => {
     const memberVotes = map[c.id] || {};
-    const sorted = Object.entries(memberVotes).sort(
-      ([, a], [, b]) => b - a
-    ) as [string, number][];
-    return {
-      clubId: c.id,
-      clubName: c.name,
-      emoji: c.emoji,
-      mvpName: sorted[0]?.[0] ?? null,
-      mvpVotes: sorted[0]?.[1] ?? 0,
-      allVotes: sorted,
-    };
+    const sorted = Object.entries(memberVotes).sort(([, a], [, b]) => b - a) as [string, number][];
+    return { clubId: c.id, clubName: c.name, emoji: c.emoji,
+      mvpName: sorted[0]?.[0] ?? null, mvpVotes: sorted[0]?.[1] ?? 0, allVotes: sorted };
   });
+}
+
+// ─── 참여 현황 모달 ──────────────────────────────────────────
+function ParticipationModal({
+  votes,
+  onClose,
+}: {
+  votes: VoteRecord[];
+  onClose: () => void;
+}) {
+  const votedSet = new Set(votes.map((v) => `${v.voter_club}:${v.voter_name}`));
+  const notVotedCount = TOTAL_MEMBERS - votes.length;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-slate-800 rounded-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col border border-slate-700 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 모달 헤더 */}
+        <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h2 className="font-black text-white text-lg">참여 현황 상세</h2>
+            <p className="text-slate-400 text-sm mt-0.5">
+              <span className="text-emerald-400 font-bold">참여 {votes.length}명</span>
+              {" · "}
+              <span className="text-rose-400 font-bold">미참여 {notVotedCount}명</span>
+              {" · "}
+              <span className="text-slate-400">전체 {TOTAL_MEMBERS}명</span>
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white flex items-center justify-center text-xl font-bold transition-colors"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* 모달 바디 */}
+        <div className="overflow-y-auto flex-1 p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {/* ─ 참여자 목록 ─ */}
+            <div>
+              <h3 className="font-black text-emerald-400 text-base mb-4 flex items-center gap-2">
+                <span>✅</span> 참여자 ({votes.length}명)
+              </h3>
+              <div className="space-y-3">
+                {CLUBS.map((club) => {
+                  const done = MEMBERS[club.id].filter((name) =>
+                    votedSet.has(`${club.id}:${name}`)
+                  );
+                  if (done.length === 0) return null;
+                  return (
+                    <div key={club.id} className="bg-slate-900/60 rounded-xl p-3 border border-slate-700/50">
+                      <p className="text-xs font-bold text-slate-400 mb-2 flex items-center gap-1.5">
+                        <span>{club.emoji}</span>
+                        <span className="truncate">{club.name}</span>
+                        <span className="text-emerald-500 font-black ml-auto flex-shrink-0">
+                          {done.length}/{MEMBERS[club.id].length}
+                        </span>
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {done.map((name) => (
+                          <span
+                            key={name}
+                            className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-semibold"
+                          >
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {votes.length === 0 && (
+                  <p className="text-slate-500 text-sm text-center py-6">
+                    아직 참여자가 없습니다
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* ─ 미참여자 목록 ─ */}
+            <div>
+              <h3 className="font-black text-rose-400 text-base mb-4 flex items-center gap-2">
+                <span>⏳</span> 미참여자 ({notVotedCount}명)
+              </h3>
+              <div className="space-y-3">
+                {CLUBS.map((club) => {
+                  const notDone = MEMBERS[club.id].filter(
+                    (name) => !votedSet.has(`${club.id}:${name}`)
+                  );
+                  if (notDone.length === 0) return null;
+                  return (
+                    <div key={club.id} className="bg-slate-900/60 rounded-xl p-3 border border-slate-700/50">
+                      <p className="text-xs font-bold text-slate-400 mb-2 flex items-center gap-1.5">
+                        <span>{club.emoji}</span>
+                        <span className="truncate">{club.name}</span>
+                        <span className="text-rose-500 font-black ml-auto flex-shrink-0">
+                          {notDone.length}명 남음
+                        </span>
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {notDone.map((name) => (
+                          <span
+                            key={name}
+                            className="text-xs bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg font-semibold"
+                          >
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {notVotedCount === 0 && (
+                  <div className="py-8 text-center">
+                    <p className="text-2xl mb-2">🎉</p>
+                    <p className="text-slate-400 text-sm font-bold">
+                      모두 투표를 완료했습니다!
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 모달 푸터 */}
+        <div className="px-6 py-3 border-t border-slate-700 flex-shrink-0">
+          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-700"
+              style={{ width: `${Math.min((votes.length / TOTAL_MEMBERS) * 100, 100)}%` }}
+            />
+          </div>
+          <p className="text-xs text-slate-500 mt-1 text-right">
+            {Math.round((votes.length / TOTAL_MEMBERS) * 100)}% 완료
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── 비밀번호 게이트 ────────────────────────────────────────────
@@ -96,9 +219,7 @@ function PasswordGate({ onAuth }: { onAuth: () => void }) {
       <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm">
         <div className="text-center mb-7">
           <span className="text-5xl">🔐</span>
-          <h1 className="text-xl font-black text-slate-800 mt-3">
-            관리자 대시보드
-          </h1>
+          <h1 className="text-xl font-black text-slate-800 mt-3">관리자 대시보드</h1>
           <p className="text-slate-400 text-sm mt-1">비밀번호를 입력해주세요</p>
         </div>
         <form onSubmit={handleSubmit}>
@@ -132,6 +253,7 @@ function Dashboard() {
   const [votes, setVotes] = useState<VoteRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [showParticipation, setShowParticipation] = useState(false);
 
   const fetchVotes = useCallback(async () => {
     const { data } = await supabase.from("votes").select("*");
@@ -144,19 +266,11 @@ function Dashboard() {
 
   useEffect(() => {
     fetchVotes();
-
     const channel = supabase
       .channel("admin-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "votes" },
-        () => fetchVotes()
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "votes" }, () => fetchVotes())
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [fetchVotes]);
 
   const scores = calcClubScores(votes);
@@ -180,29 +294,33 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
+      {/* 참여 현황 모달 */}
+      {showParticipation && (
+        <ParticipationModal votes={votes} onClose={() => setShowParticipation(false)} />
+      )}
+
       {/* 헤더 */}
       <div className="bg-gradient-to-r from-indigo-700 to-violet-700 shadow-2xl">
         <div className="max-w-5xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <p className="text-indigo-300 text-xs font-semibold tracking-widest uppercase">
-                Wenners
-              </p>
-              <h1 className="text-2xl font-black">
-                3개월 챌린지 파이널 🏆 실시간 결과
-              </h1>
+              <p className="text-indigo-300 text-xs font-semibold tracking-widest uppercase">Wenners</p>
+              <h1 className="text-2xl font-black">3개월 챌린지 파이널 🏆 실시간 결과</h1>
             </div>
             <div className="flex items-center gap-4">
-              {/* 참여 현황 */}
-              <div className="text-right bg-white/10 rounded-xl px-4 py-2">
-                <p className="text-indigo-300 text-xs font-semibold">참여 현황</p>
+              {/* 참여 현황 - 클릭 시 모달 열림 */}
+              <button
+                onClick={() => setShowParticipation(true)}
+                className="text-right bg-white/10 rounded-xl px-4 py-2 hover:bg-white/20 transition-colors cursor-pointer group"
+              >
+                <p className="text-indigo-300 text-xs font-semibold group-hover:text-white transition-colors">
+                  참여 현황 👆 클릭
+                </p>
                 <p className="text-2xl font-black">
                   {totalVotes}
-                  <span className="text-indigo-300 text-sm font-normal">
-                    /{TOTAL_MEMBERS}명
-                  </span>
+                  <span className="text-indigo-300 text-sm font-normal">/{TOTAL_MEMBERS}명</span>
                 </p>
-              </div>
+              </button>
               {/* 실시간 인디케이터 */}
               <div className="flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 rounded-xl px-3 py-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -214,9 +332,7 @@ function Dashboard() {
             <p className="text-indigo-300/60 text-xs mt-2">
               마지막 업데이트:{" "}
               {lastUpdated.toLocaleTimeString("ko-KR", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
+                hour: "2-digit", minute: "2-digit", second: "2-digit",
               })}
             </p>
           )}
@@ -239,18 +355,17 @@ function Dashboard() {
               {/* Top 3 포디움 */}
               <div className="grid grid-cols-3 gap-4 mb-4">
                 {[
-                  { rank: 0, order: 1, height: "h-40", medal: "🥇" },
-                  { rank: 1, order: 0, height: "h-32", medal: "🥈" },
-                  { rank: 2, order: 2, height: "h-24", medal: "🥉" },
-                ].map(({ rank, order, height, medal }) => {
+                  { rank: 0, order: 1, medal: "🥇" },
+                  { rank: 1, order: 0, medal: "🥈" },
+                  { rank: 2, order: 2, medal: "🥉" },
+                ].map(({ rank, order, medal }) => {
                   const item = top3[rank];
                   if (!item) return null;
-                  const style = CLUB_STYLES[item.clubId];
                   return (
                     <div
                       key={rank}
                       style={{ order }}
-                      className={`flex flex-col items-center gap-2 bg-slate-800 rounded-2xl p-4 border border-slate-700 transition-all`}
+                      className="flex flex-col items-center gap-2 bg-slate-800 rounded-2xl p-4 border border-slate-700"
                     >
                       <span className="text-3xl">{medal}</span>
                       <span className="text-2xl">{item.emoji}</span>
@@ -258,21 +373,13 @@ function Dashboard() {
                         {item.clubName}
                       </p>
                       <div className="text-center">
-                        <p className="text-3xl font-black text-white">
-                          {item.totalScore}
-                        </p>
+                        <p className="text-3xl font-black text-white">{item.totalScore}</p>
                         <p className="text-xs text-slate-400">점</p>
                       </div>
                       <div className="flex gap-1 flex-wrap justify-center">
-                        <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full font-semibold">
-                          1등 {item.rank1Votes}표
-                        </span>
-                        <span className="text-xs bg-slate-600/50 text-slate-400 px-1.5 py-0.5 rounded-full font-semibold">
-                          2등 {item.rank2Votes}표
-                        </span>
-                        <span className="text-xs bg-orange-600/20 text-orange-400 px-1.5 py-0.5 rounded-full font-semibold">
-                          3등 {item.rank3Votes}표
-                        </span>
+                        <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full font-semibold">1등 {item.rank1Votes}표</span>
+                        <span className="text-xs bg-slate-600/50 text-slate-400 px-1.5 py-0.5 rounded-full font-semibold">2등 {item.rank2Votes}표</span>
+                        <span className="text-xs bg-orange-600/20 text-orange-400 px-1.5 py-0.5 rounded-full font-semibold">3등 {item.rank3Votes}표</span>
                       </div>
                     </div>
                   );
@@ -285,28 +392,16 @@ function Dashboard() {
                   {rest.map((item, idx) => {
                     const pct = maxScore > 0 ? (item.totalScore / maxScore) * 100 : 0;
                     return (
-                      <div
-                        key={item.clubId}
-                        className="bg-slate-800 rounded-xl px-5 py-4 border border-slate-700 flex items-center gap-4"
-                      >
-                        <span className="text-slate-500 font-black w-6 text-center text-sm">
-                          {idx + 4}위
-                        </span>
+                      <div key={item.clubId} className="bg-slate-800 rounded-xl px-5 py-4 border border-slate-700 flex items-center gap-4">
+                        <span className="text-slate-500 font-black w-6 text-center text-sm">{idx + 4}위</span>
                         <span className="text-xl">{item.emoji}</span>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-sm font-bold text-slate-200">
-                              {item.clubName}
-                            </p>
-                            <p className="text-sm font-black text-white">
-                              {item.totalScore}점
-                            </p>
+                            <p className="text-sm font-bold text-slate-200">{item.clubName}</p>
+                            <p className="text-sm font-black text-white">{item.totalScore}점</p>
                           </div>
                           <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                              style={{ width: `${pct}%` }}
-                            />
+                            <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                           </div>
                         </div>
                       </div>
@@ -328,77 +423,46 @@ function Dashboard() {
             {mvps.map((mvp) => {
               const style = CLUB_STYLES[mvp.clubId];
               const members = MEMBERS[mvp.clubId] || [];
-              const totalClubVotes = votes.filter(
-                (v) => v.voter_club === mvp.clubId
-              ).length;
+              const totalClubVotes = votes.filter((v) => v.voter_club === mvp.clubId).length;
 
               return (
-                <div
-                  key={mvp.clubId}
-                  className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden"
-                >
-                  {/* 클럽 헤더 */}
+                <div key={mvp.clubId} className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
                   <div className={`px-4 py-3 ${style.bg} border-b border-slate-700`}>
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{mvp.emoji}</span>
-                      <p className={`text-xs font-bold ${style.text} leading-tight flex-1`}>
-                        {mvp.clubName}
-                      </p>
-                      <span className="text-xs text-slate-500 font-medium">
-                        {totalClubVotes}표 집계
-                      </span>
+                      <p className={`text-xs font-bold ${style.text} leading-tight flex-1`}>{mvp.clubName}</p>
+                      <span className="text-xs text-slate-500 font-medium">{totalClubVotes}표 집계</span>
                     </div>
                   </div>
 
-                  {/* MVP 결과 */}
                   <div className="p-4">
                     {mvp.mvpName ? (
                       <>
                         <div className="flex items-center gap-2 mb-3">
                           <span className="text-2xl">⭐</span>
                           <div>
-                            <p className="font-black text-xl text-white">
-                              {mvp.mvpName}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              {mvp.mvpVotes}표 획득
-                            </p>
+                            <p className="font-black text-xl text-white">{mvp.mvpName}</p>
+                            <p className="text-xs text-slate-400">{mvp.mvpVotes}표 획득</p>
                           </div>
                         </div>
-
-                        {/* 멤버별 득표 현황 */}
                         <div className="space-y-1.5">
                           {members
                             .map((name) => {
-                              const voteCount =
-                                mvp.allVotes.find(
-                                  ([n]) => n === name
-                                )?.[1] ?? 0;
-                              const pct =
-                                mvp.mvpVotes > 0
-                                  ? (voteCount / mvp.mvpVotes) * 100
-                                  : 0;
+                              const voteCount = mvp.allVotes.find(([n]) => n === name)?.[1] ?? 0;
+                              const pct = mvp.mvpVotes > 0 ? (voteCount / mvp.mvpVotes) * 100 : 0;
                               return { name, voteCount, pct };
                             })
                             .sort((a, b) => b.voteCount - a.voteCount)
                             .map(({ name, voteCount, pct }) => (
                               <div key={name} className="flex items-center gap-2">
-                                <span className="text-xs text-slate-400 w-12 text-right font-medium truncate">
-                                  {name}
-                                </span>
+                                <span className="text-xs text-slate-400 w-12 text-right font-medium truncate">{name}</span>
                                 <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
                                   <div
-                                    className={`h-full rounded-full transition-all duration-700 ${
-                                      name === mvp.mvpName
-                                        ? "bg-amber-400"
-                                        : "bg-slate-500"
-                                    }`}
+                                    className={`h-full rounded-full transition-all duration-700 ${name === mvp.mvpName ? "bg-amber-400" : "bg-slate-500"}`}
                                     style={{ width: `${pct}%` }}
                                   />
                                 </div>
-                                <span className="text-xs text-slate-400 w-6 text-right font-mono">
-                                  {voteCount}
-                                </span>
+                                <span className="text-xs text-slate-400 w-6 text-right font-mono">{voteCount}</span>
                               </div>
                             ))}
                         </div>
@@ -415,20 +479,24 @@ function Dashboard() {
           </div>
         </section>
 
-        {/* 진행률 바 */}
+        {/* ─── 전체 진행률 + 참여 현황 버튼 ─── */}
         <section className="bg-slate-800 rounded-2xl px-5 py-4 border border-slate-700">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-bold text-slate-300">전체 투표 진행률</p>
-            <p className="text-sm font-black text-white">
-              {totalVotes} / {TOTAL_MEMBERS}명
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-black text-white">{totalVotes} / {TOTAL_MEMBERS}명</p>
+              <button
+                onClick={() => setShowParticipation(true)}
+                className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg font-semibold transition-colors"
+              >
+                상세 보기
+              </button>
+            </div>
           </div>
           <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-700"
-              style={{
-                width: `${Math.min((totalVotes / TOTAL_MEMBERS) * 100, 100)}%`,
-              }}
+              style={{ width: `${Math.min((totalVotes / TOTAL_MEMBERS) * 100, 100)}%` }}
             />
           </div>
           <p className="text-xs text-slate-500 mt-1 text-right">
@@ -455,9 +523,5 @@ export default function AdminPage() {
     setAuthenticated(true);
   }
 
-  return authenticated ? (
-    <Dashboard />
-  ) : (
-    <PasswordGate onAuth={handleAuth} />
-  );
+  return authenticated ? <Dashboard /> : <PasswordGate onAuth={handleAuth} />;
 }
