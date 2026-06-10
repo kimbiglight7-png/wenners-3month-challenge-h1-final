@@ -296,6 +296,117 @@ function ResetConfirmModal({
   );
 }
 
+// ─── 투표 관리 모달 ──────────────────────────────────────────
+function VoteManageModal({
+  votes,
+  onDelete,
+  onClose,
+}: {
+  votes: VoteRecord[];
+  onDelete: (id: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(id: string) {
+    setDeletingId(id);
+    await onDelete(id);
+    setDeletingId(null);
+    setConfirmId(null);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col border border-slate-700 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h2 className="font-black text-white text-lg">투표 관리</h2>
+            <p className="text-slate-400 text-sm mt-0.5">
+              삭제하면 해당 투표자가 다시 투표할 수 있습니다
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white flex items-center justify-center text-xl font-bold transition-colors"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* 목록 */}
+        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+          {votes.length === 0 ? (
+            <p className="text-slate-500 text-sm text-center py-10">투표 데이터가 없습니다</p>
+          ) : (
+            CLUBS.map((club) => {
+              const clubVotes = votes.filter((v) => v.voter_club === club.id);
+              if (clubVotes.length === 0) return null;
+              return (
+                <div key={club.id} className="bg-slate-900/60 rounded-xl border border-slate-700/50 overflow-hidden">
+                  <div className="px-4 py-2 bg-slate-700/40 flex items-center gap-2">
+                    <span>{club.emoji}</span>
+                    <span className="text-xs font-bold text-slate-300">{club.name}</span>
+                    <span className="text-xs text-slate-500 ml-auto">{clubVotes.length}명</span>
+                  </div>
+                  <div className="divide-y divide-slate-700/50">
+                    {clubVotes.map((vote) => (
+                      <div key={vote.id} className="px-4 py-3 flex items-center gap-3">
+                        <span className="text-sm font-bold text-white flex-1">{vote.voter_name}</span>
+                        <span className="text-xs text-slate-500">
+                          {new Date(vote.created_at).toLocaleString("ko-KR", {
+                            month: "2-digit", day: "2-digit",
+                            hour: "2-digit", minute: "2-digit",
+                          })}
+                        </span>
+                        {confirmId === vote.id ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-rose-400 font-semibold">삭제할까요?</span>
+                            <button
+                              onClick={() => setConfirmId(null)}
+                              disabled={deletingId === vote.id}
+                              className="text-xs px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-semibold transition-colors"
+                            >
+                              취소
+                            </button>
+                            <button
+                              onClick={() => handleDelete(vote.id)}
+                              disabled={deletingId === vote.id}
+                              className="text-xs px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {deletingId === vote.id ? (
+                                <span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
+                              ) : "삭제"}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmId(vote.id)}
+                            className="text-xs px-2.5 py-1 bg-slate-700 hover:bg-rose-600/30 hover:text-rose-400 text-slate-400 rounded-lg font-semibold transition-colors border border-transparent hover:border-rose-500/30"
+                          >
+                            🗑 삭제
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── 메인 대시보드 ────────────────────────────────────────────
 function Dashboard() {
   const [votes, setVotes] = useState<VoteRecord[]>([]);
@@ -303,6 +414,7 @@ function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [showParticipation, setShowParticipation] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showVoteManage, setShowVoteManage] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchVotes = useCallback(async () => {
@@ -321,6 +433,12 @@ function Dashboard() {
     setLastUpdated(new Date());
     setIsDeleting(false);
     setShowResetConfirm(false);
+  }
+
+  async function handleDeleteVote(id: string) {
+    await supabase.from("votes").delete().eq("id", id);
+    setVotes((prev) => prev.filter((v) => v.id !== id));
+    setLastUpdated(new Date());
   }
 
   useEffect(() => {
@@ -359,6 +477,15 @@ function Dashboard() {
         <ParticipationModal votes={votes} onClose={() => setShowParticipation(false)} />
       )}
 
+      {/* 투표 관리 모달 */}
+      {showVoteManage && (
+        <VoteManageModal
+          votes={votes}
+          onDelete={handleDeleteVote}
+          onClose={() => setShowVoteManage(false)}
+        />
+      )}
+
       {/* 초기화 확인 모달 */}
       {showResetConfirm && (
         <ResetConfirmModal
@@ -390,6 +517,14 @@ function Dashboard() {
                   <span className="text-indigo-300 text-sm font-normal">/{TOTAL_MEMBERS}명</span>
                 </p>
               </button>
+              {/* 투표 관리 버튼 */}
+              <button
+                onClick={() => setShowVoteManage(true)}
+                className="flex items-center gap-1.5 bg-slate-500/20 border border-slate-500/30 hover:bg-slate-500/30 rounded-xl px-3 py-2 transition-colors"
+              >
+                <span className="text-slate-300 text-sm font-bold">✏️ 투표 관리</span>
+              </button>
+
               {/* 초기화 버튼 */}
               <button
                 onClick={() => setShowResetConfirm(true)}
