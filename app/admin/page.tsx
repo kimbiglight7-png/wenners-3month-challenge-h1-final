@@ -6,7 +6,6 @@ import {
   CLUBS,
   MEMBERS,
   CLUB_STYLES,
-  RANK_MEDALS,
   TOTAL_MEMBERS,
 } from "@/lib/data";
 import type { VoteRecord, ClubScore, MVPResult } from "@/lib/types";
@@ -248,12 +247,63 @@ function PasswordGate({ onAuth }: { onAuth: () => void }) {
   );
 }
 
+// ─── 초기화 확인 모달 ────────────────────────────────────────
+function ResetConfirmModal({
+  onConfirm,
+  onCancel,
+  isDeleting,
+}: {
+  onConfirm: () => void;
+  onCancel: () => void;
+  isDeleting: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-800 rounded-2xl w-full max-w-sm border border-rose-500/30 shadow-2xl p-6">
+        <div className="text-center mb-5">
+          <span className="text-5xl">⚠️</span>
+          <h2 className="font-black text-white text-lg mt-3">전체 데이터 초기화</h2>
+          <p className="text-slate-400 text-sm mt-2 leading-relaxed">
+            모든 투표 데이터가 <span className="text-rose-400 font-bold">영구 삭제</span>됩니다.
+            <br />이 작업은 되돌릴 수 없습니다.
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isDeleting}
+            className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold rounded-xl transition-colors disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isDeleting ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                삭제 중...
+              </>
+            ) : (
+              "전체 삭제"
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── 메인 대시보드 ────────────────────────────────────────────
 function Dashboard() {
   const [votes, setVotes] = useState<VoteRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [showParticipation, setShowParticipation] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchVotes = useCallback(async () => {
     const { data } = await supabase.from("votes").select("*");
@@ -264,11 +314,21 @@ function Dashboard() {
     setLoading(false);
   }, []);
 
+  async function handleResetVotes() {
+    setIsDeleting(true);
+    await supabase.from("votes").delete().not("id", "is", null);
+    setVotes([]);
+    setLastUpdated(new Date());
+    setIsDeleting(false);
+    setShowResetConfirm(false);
+  }
+
   useEffect(() => {
     fetchVotes();
     const channel = supabase
       .channel("admin-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "votes" }, () => fetchVotes())
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "votes" }, () => fetchVotes())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchVotes]);
@@ -299,6 +359,15 @@ function Dashboard() {
         <ParticipationModal votes={votes} onClose={() => setShowParticipation(false)} />
       )}
 
+      {/* 초기화 확인 모달 */}
+      {showResetConfirm && (
+        <ResetConfirmModal
+          onConfirm={handleResetVotes}
+          onCancel={() => setShowResetConfirm(false)}
+          isDeleting={isDeleting}
+        />
+      )}
+
       {/* 헤더 */}
       <div className="bg-gradient-to-r from-indigo-700 to-violet-700 shadow-2xl">
         <div className="max-w-5xl mx-auto px-6 py-5">
@@ -321,6 +390,14 @@ function Dashboard() {
                   <span className="text-indigo-300 text-sm font-normal">/{TOTAL_MEMBERS}명</span>
                 </p>
               </button>
+              {/* 초기화 버튼 */}
+              <button
+                onClick={() => setShowResetConfirm(true)}
+                className="flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/30 hover:bg-rose-500/30 rounded-xl px-3 py-2 transition-colors"
+              >
+                <span className="text-rose-400 text-sm font-bold">🗑 초기화</span>
+              </button>
+
               {/* 실시간 인디케이터 */}
               <div className="flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 rounded-xl px-3 py-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
